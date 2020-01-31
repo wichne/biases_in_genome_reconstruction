@@ -28,8 +28,10 @@ def make_whisker_plot(comparison, outname, style):
 	import matplotlib.pyplot as plt
 	import pandas as pd
 	#Due to the way that seaborn reads in the dataframe. The x-axis variable
-	#must be repeated for each entry. This the y-axis data presented in a single
+	#must be repeated for each entry. The the y-axis data presented in a single
 	#column
+	#Three different blocks of text to address the different name variables provided
+	#in the dataframes. Also used to rename the y-axis variables.
 	if style == 'variance':
 		df = pd.DataFrame(columns=['name','variance'])
 		index_value = 0
@@ -42,7 +44,8 @@ def make_whisker_plot(comparison, outname, style):
 		ax1 = sns.boxplot(x="name", y="variance", data=df)
 		#Option for including points within figure - not recommended for TETRA
 		#scores
-		#ax1 = sns.swarmplot(x="name", y="variance", data=df, color="grey")
+		#Adds individual data points, transpartent alpha=0.2
+		#Grey in color
 		ax1 = sns.stripplot(x="name", y="variance", data=df, jitter=True, alpha=.2, color="grey")
 		plt.xticks(rotation=90)
 		fig1 = ax1.get_figure()
@@ -58,7 +61,6 @@ def make_whisker_plot(comparison, outname, style):
 				df.loc[index_value] = [i, x]
 				index_value += 1
 		ax2 = sns.boxplot(x="name", y="length", data=df)
-		#ax2 = sns.swarmplot(x="name", y="length", data=df, color="grey")
 		ax2 = sns.stripplot(x="name", y="length", data=df, jitter=True, alpha=.2, color="grey")
 		plt.xticks(rotation=90)
 		#Set Y-axis size
@@ -75,7 +77,6 @@ def make_whisker_plot(comparison, outname, style):
 				index_value += 1
 		ax3 = sns.boxplot(x="name", y="identity", data=df)
 		ax3.set_ylim([75,100])
-		#ax = sns.swarmplot(x="name", y="identity", data=df, color=".25")
 		ax3 = sns.stripplot(x="name", y="identity", data=df, jitter=True, alpha=.2, color="grey")
 		plt.xticks(rotation=90)
 		fig3 = ax3.get_figure()
@@ -209,19 +210,22 @@ def run_stats(names, comparison):
 		for x in comparison[i]:
 			df.loc[index_value] = [i, x]
 			index_value += 1
+	#After clean up, use Wilks-Shapiro test to determine data normalcy
 	normal_data = []
 	for n in names:
 		print(n, stats.shapiro(df['variance'][df['name'] == n]))
+		#If p-value greater than alpha 0.05 accept null hypothesis
+		#Data set is normally distributed
 		if float(stats.shapiro(df['variance'][df['name'] == n])[1]) > 0.05:
 			normal_data.append(n)
 	print(str(normal_data))
-		
+	#For normal data sets determine the T-test significance test
 	if len(normal_data) > 1:
 		for i,x in enumerate(normal_data):
 			for j,y in enumerate(normal_data):
 				if i > j:
 					print(str(x), str(y), stats.ttest_ind(df['variance'][df['name'] == x], df['variance'][df['name'] == y], equal_var=False))
-		
+	#For data sets that do not adhere to normalcy, determine Mann-Whitney Ranked Sums test	
 	for i,x in enumerate(names):
 		for j,y in enumerate(names):
 			if i > j:
@@ -256,6 +260,7 @@ def main():
 
 	if arg_dict['runGC'] == True:
 		gc_comparison = {}
+		#Populate dictionary that will be used for variance analysis
 		#Splits genome set file names
 		for i in arg_dict['input'].split(","):	
 			#Each line represents a genome name
@@ -285,6 +290,8 @@ def main():
 							except KeyError:
 								gc_comparison[i] = [float(x)]
 								outgcfile.write(i+"\t"+str(x)+"\n")
+			#If the data has been calculated previously and stored in a checkpoint file
+			#Process data to be run through stats and plot making
 			else:
 				for line in open(str(i)+".gcvar", "r"):
 					line = line.strip()
@@ -295,12 +302,11 @@ def main():
 						gc_comparison[data[0]] = [float(data[1])]
 
 		names = arg_dict['input'].split(",")
-		
 		run_stats(names, gc_comparison)
-
 		make_whisker_plot(gc_comparison, "gc_variance.svg", "variance")
 
 	if arg_dict['runRedundancy'] == True:
+		#Performs analysis using NUCmer to identify repeat regions within a genome
 		red_len_comparison = {}
 		red_ident_comparison = {}
 		for i in arg_dict['input'].split(","):
@@ -309,32 +315,45 @@ def main():
 				total_len = 0
 				redundant_lengths = []
 				redundant_identity = []
+				#Determine the total length of each genome
 				for record in SeqIO.parse(open(str(line)+"."+str(arg_dict['fastaext']), "r"), "fasta"):
 					total_len += len(record.seq)		
+				#Create NUCmer output file name
 				coords_out = str(line)+".coords"
 				previously_matched = []
+				#Only run NUCmer is .coords output file is absent
 				if os.path.exists(coords_out) == False:
 					fasta_in = str(line)+"."+str(arg_dict['fastaext'])
 					subprocess.call(["nucmer", "--maxmatch", "-p", line, fasta_in, fasta_in])
 					delta_in = str(line)+".delta"
+					#Open .coords outfile
 					outfile = open(coords_out, "w")
+					#Store .coords data in file
 					subprocess.call(["show-coords", "-T", "-H", delta_in],stdout=outfile)
 					outfile.close()
+				#Parse the coordinate data in each .coords file for each genome
 				for coords in open(coords_out, "r"):
 					coords = coords.strip()
 					data = coords.split("\t")
+					#Create a unique string for each query and ref representing regions of overlap
 					query = str(data[7])+"-"+str(min(data[0],data[1]))+"-"+str(max(data[0],data[1]))+"-"+data[6]
 					ref = str(data[8])+"-"+str(min(data[2],data[3]))+"-"+str(max(data[2],data[3]))+"-"+data[6]
+					#If the identified region is a self-hit, the same region identified as query and reference
+					#skip
 					if data[7] == data[8] and data[0] == data[2]:
 						continue
-
+					#Calculate all lengths where %identity is >=97
 					if query not in previously_matched and float(data[6]) >=97:
 						redundant_lengths.append(float(min([data[4],data[5]]))/float(total_len))
 						redundant_identity.append(float(data[6]))
 						previously_matched.append(query)
 						previously_matched.append(ref)
+				#Check to see if any regions in genome were in repeat regions before proceeding
 				if len(redundant_lengths) > 0 and len(redundant_identity) > 0:
 					try:
+						#Exclude genomes with excessively high >50% of length in repeat regions
+						#This can occur when there are multiple copies (3+) of the same repeat
+						#Each instance counts separately 
 						if sum(redundant_lengths) < 0.5:
 							red_len_comparison[i].append(sum(redundant_lengths))
 						red_ident_comparison[i].append(sum(redundant_identity)/len(redundant_identity))
@@ -343,9 +362,7 @@ def main():
 						red_ident_comparison[i] = [sum(redundant_identity)/len(redundant_identity)]
 				
 		names = arg_dict['input'].split(",")
-		
 		run_stats(names, red_len_comparison)
-
 		make_whisker_plot(red_len_comparison, "redundancy_length.svg", "length")
 		make_whisker_plot(red_ident_comparison, "redundant_avg_identity.svg", "identity")
 
@@ -358,12 +375,17 @@ def main():
 					line = line.strip()
 					chunk_zscore = {}
 					#Parse through each contig. Splitting each contig into
-					#5000bp fragments with a 2500bp step
+					#10000bp fragments with a 5000bp step
+					#To change values, modify below
 					for record in SeqIO.parse(open(str(line)+"."+str(arg_dict['fastaext']), "r"), "fasta"):
+						#Here
 						if len(record.seq) < 10000:
 							continue
+						#Here
 						numOfChunks = slidingWindow(record.seq,10000,5000)
+						#Here
 						for t in range(0,numOfChunks*5000,5000):
+							#Here
 							chunk_zscore.update(calc_org_tetra(record.seq[t:t+5000],t))
 					tet_var = np.var(pd.DataFrame(calc_tetra_corr(chunk_zscore)), axis=0)
 					try:
@@ -377,6 +399,8 @@ def main():
 									outtetrafile.write(i+"\t"+str(x)+"\n")
 					except ValueError:
 						continue
+			#If the data has been calculated previously and stored in a checkpoint file
+			#Process data to be run through stats and plot making
 			else:
 				for line in open(str(i)+".tetravar", "r"):
 					line = line.strip()
@@ -387,9 +411,7 @@ def main():
 						tet_comparison[data[0]] = [float(data[1])]
 				
 		names = arg_dict['input'].split(",")
-
 		run_stats(names, tet_comparison)
-
 		make_whisker_plot(tet_comparison, "tetra_variance.svg", "variance")
 
 
