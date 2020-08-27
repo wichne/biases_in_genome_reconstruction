@@ -28,7 +28,7 @@ open (CR, ">$CRfile") or die "No write $CRfile? : $!\n";
 my $NRfile = $infile . ".NR.coords";
 open (NR, ">$NRfile") or die "No write $NRfile? : $!\n";
 
-# step through input
+# step through input nucmer input
 my ($this_lo, $this_hi, $this_qry, $last_hi, $last_ref, $last_reflen);
 while (my $l = <IN>) {
     chomp $l;

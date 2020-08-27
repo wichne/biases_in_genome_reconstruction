@@ -7,6 +7,20 @@ if (! @ARGV ||
     $ARGV[0] eq "-h") {
     print "GC_ANALYSIS
 
+Input is the genome sequence in fasta format, and two files listing the genome coordinates of the binned
+and not-binned regions (described below).
+The program calculates
+ 1) the %G+C of the genome sequence
+ 2) the mean %G+C for the binned regions (and standard deviation)
+ 3) the mean distance (absolute difference) between the %G+C of the genome and the binned regions (and standard deviation)
+ 4) a boot-strapped p-value (n=1000) for the binned distance measure
+ 5) the mean %G+C for the not-binned regions (and standard deviation)
+ 6) the mean distance (absolute difference) between the %G+C of the genome and the not-binned regions (and standard deviation)
+ 7) a boot-strapped p-value (n=1000) for the not-binned distance measure
+The program writes to STDOUT.
+The output is tab-delimited and the format is defined by the first line of the output.
+
+
 USAGE: $0 genome.fa CR.coords NR.coords
 
 genome.fa - fasta file containing the genome sequence
@@ -69,7 +83,7 @@ while (my $line = <$bc>) {
 }
 
 # output header line
-print "Molecule id\t%G+C\tCR %G+C mean\tCR %G+C stdev\tCR dist mean\tCR dist stdev\tCR dist p\tNR %G+C mean\tNR %G+C stdev\tNR dist mean\tNR dist stdev\tNR dist p\n";
+print "#Molecule id\t%G+C\tCR %G+C mean\tCR %G+C stdev\tCR dist mean\tCR dist stdev\tCR dist p\tNR %G+C mean\tNR %G+C stdev\tNR dist mean\tNR dist stdev\tNR dist p\n";
 # Now let's get computational
 our $GC_genome;
 foreach my $id (keys %SEQ) {
